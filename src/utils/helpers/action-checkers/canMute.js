@@ -1,3 +1,3 @@
-const actionChecker = require("./actionChecker");
+const actionChecker = require('./actionChecker');
 
-module.exports = actionChecker("MANAGE_ROLES");
+module.exports = actionChecker('MANAGE_ROLES');

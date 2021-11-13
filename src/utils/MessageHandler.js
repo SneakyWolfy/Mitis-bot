@@ -1,95 +1,134 @@
-const Discord = require("discord.js");
+const { successEmbed } = require('./Provider/embed');
+const rh = require('./ResponseHandler');
+
+// eslint-disable-next-line no-unused-vars
+const Discord = require('discord.js');
+
+// eslint-disable-next-line no-unused-vars
+const Argument = require('./Argument');
 
 module.exports = class MessageHandler {
-  isExited = false;
-  botMessage = null;
+	#isExited = false;
+	#botMessage = null;
+	#filter = m => this.options.owner.id === m.author.id;
 
-  constructor(data, message, options) {
-    //values
-    this._message = message;
-    this._ownerID = options.owner ?? message.author.id;
-    this._data = data;
-    this._timeout = options.timeout ?? 60000;
-    this._update = options.update ?? true;
-    this._deleteMessage = options.deleteMessage ?? true;
-    this._update = options.update ?? true;
-    this._cancelKeyword = options.cancelKeyword ?? "exit";
-    this._skipKeyword = options.skipKeyword ?? "skip";
+	/**
+	 *
+	 * @param {Array[String]} data
+	 * @param {Argument} args
+	 * @param {Object} options
+	 */
+	constructor(data, args, options) {
+		this.options = Object.assign(
+			{
+				owner: args.author,
+				timeout: 60000,
+				update: true,
+				deleteMessage: true,
+				cancelKeyword: 'q',
+				skipKeyword: 's',
+				title: '',
+				footer: 'type "q" to quit | "s" to skip to next option',
+			},
+			options,
+		);
 
-    this._filter = (m) => this._ownerID === m.author.id;
-    this._options = { time: this._timeout, max: 1, errors: ["time"] };
+		this.messageOptions = {
+			max: 1,
+			time: this.options.timeout,
+			errors: ['time'],
+		};
 
-    this._title = options.title ?? "";
+		this.ownerID = this.options.owner ?? args.author.id;
+		this.message = args.message;
+		this.data = data;
 
-    this.embed = new Discord.MessageEmbed()
-      .setTitle(this._title)
-      .setFooter('*type "exit" to quit | "skip" to skip to next option*');
-  }
+		this.embed = successEmbed()
+			.setTitle(this.options.title)
+			.setFooter(this.options.footer);
+	}
 
-  async prompt(message = "", format = (m) => m) {
-    this.embed.setDescription(format(message));
+	async #prompt(message = '', format = (e, m) => e.setDescription(m)) {
+		const embed = await format(this.embed, message);
 
-    if (!this.botMessage) {
-      //Sends First Message
-      this.botMessage = await this._message.channel.send(this.embed);
-    } else {
-      //Sends Edits Message
-      await this.botMessage.edit("", {
-        embed: this.embed,
-      });
-    }
+		await this.#sendEmbed(embed);
 
-    return await this._message.channel.awaitMessages(
-      this._filter,
-      this._options
-    );
-  }
+		return await this.message.channel.awaitMessages(
+			this.#filter,
+			this.messageOptions,
+		);
+	}
 
-  async finish() {
-    this.embed.setDescription("");
-    this.embed.setTitle("Finished!");
-    this.embed.setColor("#55ff55");
-    await this.prompt();
-  }
+	async #sendEmbed(embed) {
+		//? If this is the first message, creates a message.1
+		if (!this.#botMessage)
+			this.#botMessage = await this.message.channel.send(embed);
+		//? If this a response, edit the old message.
+		else await this.#botMessage.edit('', { embed });
+	}
 
-  async send(callback, format) {
-    try {
-      for (const [index, message] of this._data.entries()) {
-        if (this.isExited) break;
+	async #finish() {
+		const embed = successEmbed().setTitle('Finished!');
+		await this.#sendEmbed(embed);
 
-        const response = await this.prompt(message, format);
+		setTimeout(async () => {
+			await this.#botMessage.delete();
+		}, 3000);
+	}
 
-        //Accesses the user's Message
-        const resMessage = response.first();
+	/**
+	 * @param {function(Discord.Message, any, Number):String} callback - Response message, current value, index. Returns feedback
+	 * @param {function(Discord.MessageEmbed, any):Discord.MessageEmbed} format - current embed, current value. Return the embed.
+	 */
+	async send(callback, format) {
+		try {
+			//? Iterates over all key value pairs
+			for (const [index, message] of this.data.entries()) {
+				//? Prevents new prompts from appearing if user has typed "exit"
+				if (this.#isExited) break;
 
-        if (this.checkExit(resMessage)) break;
-        if (await this.checkSkip(resMessage)) {
-          await resMessage.delete();
-          continue;
-        }
+				//? Prompts the user with a message to respond to.
+				//? The first response from the owner will be resoled
+				const response = await this.#prompt(message, format);
+				const resMessage = response.first();
 
-        const configMessage = await callback(resMessage, message, index);
+				//? Exits the control if the user exits
+				if (this.#checkExit(resMessage)) break;
 
-        if (configMessage && typeof configMessage === "string")
-          await this._message.channel.send(configMessage);
+				//? Prevents the callback from running if the user skips
+				if (await this.#checkSkip(resMessage)) {
+					await resMessage.delete();
+					continue;
+				}
 
-        await resMessage.delete();
-      }
-      await this.finish();
-    } catch (error) {
-      this.onTimeout();
-    }
-  }
+				//? Executes the callback, if the callback returns a string, then it will send it in the current channel
+				const callbackRes = await callback(resMessage, message, index);
 
-  onTimeout() {
-    this.isExited = true;
-  }
+				const sentMessage = await rh.send(callbackRes, this.message.channel);
+				setTimeout(async () => {
+					if (sentMessage) {
+						await sentMessage.delete();
+					}
+				}, 3000);
 
-  async checkSkip(response) {
-    return response.content.toLowerCase().trim() === this._skipKeyword;
-  }
+				//? deletes the user's response message
+				await resMessage.delete();
+			}
+			await this.#finish();
+		} catch (error) {
+			this.#onTimeout();
+		}
+	}
 
-  checkExit(response) {
-    return response.content.toLowerCase().trim() === this._cancelKeyword;
-  }
+	#onTimeout() {
+		this.#isExited = true;
+	}
+
+	async #checkSkip(response) {
+		return response.content.toLowerCase().trim() === this.options.skipKeyword;
+	}
+
+	#checkExit(response) {
+		return response.content.toLowerCase().trim() === this.options.cancelKeyword;
+	}
 };

@@ -1,6 +1,7 @@
-const getConfigRole = require("./getConfigRole");
-const { Guild, Role } = require("discord.js");
+const getConfigRole = require('./getConfigRole');
 
+// eslint-disable-next-line no-unused-vars
+const { Guild, Role } = require('discord.js');
 /**
  *
  * @param {Guild} guild
@@ -8,15 +9,15 @@ const { Guild, Role } = require("discord.js");
  * @returns {Promise<Array<Role>>} List of config roles
  */
 const getAllKeyedRoles = async (guild, roleList) => {
-  const rolePromises = roleList.map(async (roleName) => {
-    const role = await getConfigRole(roleName, guild);
+	const rolePromises = roleList.map(async roleName => {
+		const role = await getConfigRole(roleName, guild);
 
-    return role;
-  });
+		return role;
+	});
 
-  const roleArr = await Promise.all(rolePromises);
+	const roleArr = await Promise.all(rolePromises);
 
-  return roleArr.filter((role) => typeof role !== "boolean");
+	return roleArr.filter(role => typeof role !== 'boolean');
 };
 
 module.exports = getAllKeyedRoles;

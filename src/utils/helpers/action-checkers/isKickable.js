@@ -1,3 +1,3 @@
-const actionChecker = require("./actionChecker");
+const actionChecker = require('./actionChecker');
 
-module.exports = actionChecker("KICK_MEMBERS");
+module.exports = actionChecker('KICK_MEMBERS');

@@ -1,6 +1,7 @@
-const { Guild, Role } = require("discord.js");
-const getConfigRole = require("./getConfigRole");
+const getConfigRole = require('./getConfigRole');
 
+// eslint-disable-next-line no-unused-vars
+const { Guild, Role } = require('discord.js');
 /**
  *
  * @param {String} roleName
@@ -9,17 +10,17 @@ const getConfigRole = require("./getConfigRole");
  * @returns {Promise<Role>}
  */
 const findRole = async (roleName, guild, errorCB) => {
-  const configRole = await getConfigRole(roleName, guild);
-  if (configRole && typeof configRole !== "boolean") return configRole;
+	const configRole = await getConfigRole(roleName, guild);
+	if (configRole && typeof configRole !== 'boolean') return configRole;
 
-  const newRole = guild.roles.cache.find(
-    (guildRole) => guildRole.name === role || guildRole.id === role
-  );
+	const newRole = guild.roles.cache.find(
+		guildRole => guildRole.name === roleName || guildRole.id === roleName,
+	);
 
-  if (newrole) return newRole;
+	if (newRole) return newRole;
 
-  if (errorCB) errorCB(roleName);
-  return false;
+	if (errorCB) await errorCB(roleName);
+	return false;
 };
 
 module.exports = findRole;

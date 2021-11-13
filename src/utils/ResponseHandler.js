@@ -1,77 +1,108 @@
-const Discord = require("discord.js");
-const Pagination = require("./Pagination");
-const Argument = require("./Argument");
+const Discord = require('discord.js');
+const configModel = require('../models/configModel');
+const ms = require('ms');
 
 class ResponseHandler {
-  get defaults() {
-    return {
-      dm: "Sends the dm to the user",
-      silent: "Hides all command output",
-      del: "Deletes user command message",
-    };
-  }
+	get defaults() {
+		return {
+			dm: 'Send the command response to your DM',
+			silent: 'Hide the command response',
+			delete: 'Immediately deletes your command message',
+			keep: 'Prevents message from being automatically removed',
+		};
+	}
 
-  /**
-   *
-   * @param {Pagination} pagination
-   * @param {Discord.Message} message - The commands message object
-   * @param {Array} args - The commands arguments
-   * @param {Object} [flags] - Optional flags to be in use
-   * @param {boolean} [flags.dm=false]
-   * @param {boolean} [flags.silent=false]
-   * @param {boolean} [flags.del=false]
-   */
-  async outputPagination(pagination, args, flags) {
-    if (!pagination || !args) return;
+	/**
+	 *
+	 * @param {Pagination} pagination
+	 * @param {Discord.Message} message - The commands message object
+	 * @param {Argument} args - The commands arguments
+	 * @param {Object} [flags] - Optional flags to be in use
+	 * @param {boolean} [flags.dm=false]
+	 * @param {boolean} [flags.silent=false]
+	 * @param {boolean} [flags.delete=false]
+	 */
+	async outputPagination(pagination, args, flags) {
+		if (!pagination || !args) return;
 
-    const useDM = flags.dm ?? false;
-    const useSilent = flags.silent ?? false;
-    const useDel = flags.del ?? false;
+		const { useDM, useSilent, useDelete } = this.getFlagBooleans(args, flags);
 
-    if (args.flags.has("del") && useDel && args.message.deletable)
-      await args.message.delete();
+		if (useDelete && args.message.deletable) await args.message.delete();
+		if (useSilent) return;
+		if (useDM) return await pagination.dm(args.message.author);
 
-    if (args.flags.has("silent") && useSilent) return;
-    if (args.flags.has("dm") && useDM)
-      return await pagination.dm(args.message.author);
+		await pagination.send(args.channel);
+	}
 
-    await pagination.send(args.channel);
-  }
+	async sendResponse(content, channel) {
+		if (content instanceof Discord.MessageEmbed)
+			return await channel.send({ embeds: [content] });
 
-  /**
-   *
-   * @param {String} content - The Message's content
-   * @param {Argument} args - The commands arguments
-   * @param {Object} [flags] - Optional flags to be in use
-   * @param {boolean} [flags.dm=false]
-   * @param {boolean} [flags.silent=false]
-   * @param {boolean} [flags.del=false]
-   */
-  async output(content, args, flags = {}) {
-    if (!content || !args.message || !args) return;
+		return await channel.send(content, {
+			allowedMentions: { users: [] },
+		});
+	}
 
-    const useDM = flags.dm ?? false;
-    const useSilent = flags.silent ?? false;
-    const useDel = flags.del ?? false;
+	getFlagBooleans(args, flags = {}) {
+		return {
+			useDelete: flags.dm && args.flags.has('delete'),
+			useSilent: flags.silent && args.flags.has('silent'),
+			useDM: flags.dm && args.flags.has('dm'),
+			useKeep: flags.keep && args.flags.has('keep'),
+		};
+	}
 
-    if (args.flags.has("del") && useDel && args.message.deletable)
-      await args.message.delete();
+	/**
+	 *
+	 * @param {String} content - The Message's content
+	 * @param {Argument} args - The commands arguments
+	 * @param {Object} [flags] - Optional flags to be in use
+	 * @param {boolean} [flags.dm=false]
+	 * @param {boolean} [flags.silent=false]
+	 * @param {boolean} [flags.delete=false]
+	 */
+	async output(content, args, flags = {}) {
+		if (!content || !args.message || !args) return;
 
-    if (args.flags.has("silent") && useSilent) return;
-    if (args.flags.has("dm") && useDM)
-      return await this.sendUser(args.message.author, content);
+		const { useDM, useSilent, useDelete, useKeep } = this.getFlagBooleans(
+			args,
+			flags,
+		);
 
-    if (content instanceof Discord.MessageEmbed)
-      return await args.message.channel.send(content);
+		if (useDM && args.message.deletable) await args.message.delete();
+		if (useSilent) return;
+		if (useDelete) return await this.sendUser(args.message.author, content);
 
-    return await args.message.channel.send(content, {
-      allowedMentions: { users: [] },
-    });
-  }
+		await this.sendAutoDelete(content, args.channel, useKeep);
+	}
 
-  async sendUser(user, message) {
-    return await user.send(message).catch(() => {});
-  }
+	async sendAutoDelete(content, channel, keep = false) {
+		const response = await this.sendResponse(content, channel);
+		const configData = await configModel.fetchConfig(channel.guild.id);
+
+		const autoDeleteTime = ms(configData?.autodelete ?? 0);
+
+		if (autoDeleteTime && !keep) {
+			setTimeout(async () => {
+				await response.delete().catch(() => {});
+			}, autoDeleteTime);
+		}
+	}
+
+	async send(content, channel) {
+		if (!content) return;
+
+		if (content instanceof Discord.MessageEmbed)
+			return await channel.send(content);
+
+		return await channel.send(content, {
+			allowedMentions: { users: [] },
+		});
+	}
+
+	async sendUser(user, message) {
+		return await user.send(message).catch(() => {});
+	}
 }
 
 module.exports = new ResponseHandler();

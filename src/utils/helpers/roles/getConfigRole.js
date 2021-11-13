@@ -1,22 +1,20 @@
-const configController = require("../../../controllers/configController");
-const App = require("../../../models/appModel");
-const { Guild, Role } = require("discord.js");
-const parseRole = require("../../Parse/parseRole");
+const configModel = require('../../../models/configModel');
+const parseRole = require('../../Parse/parseRole');
 
+// eslint-disable-next-line no-unused-vars
+const { Guild, Role } = require('discord.js');
 /**
  *
  * @param {String} roleName
  * @param {Guild} guild
  * @returns {Promise<Role>}
  */
-const getConfigRole = async (roleName, guild) => {
-  if (!guild) return roleName;
+module.exports = async (roleName, guild) => {
+	if (!guild) return roleName;
 
-  const configData = await configController.fetchConfig(guild.id);
-  const configRole = configData.roles?.[roleName];
-  if (!configRole) return false;
+	const configData = await configModel.fetchConfig(guild.id);
+	const configRole = configData.roles?.[roleName];
+	if (!configRole) return false;
 
-  return await parseRole(configRole, guild);
+	return await parseRole(configRole, guild);
 };
-
-module.exports = getConfigRole;

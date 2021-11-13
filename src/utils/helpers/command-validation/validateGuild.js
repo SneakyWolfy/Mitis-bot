@@ -1,6 +1,7 @@
-const AppError = require("../../AppError");
+const AppError = require('../../AppError');
 
-const Command = require("../../Command");
+// eslint-disable-next-line no-unused-vars
+const Command = require('../../Command');
 /**
  *
  * @param {Command} permObj
@@ -8,13 +9,13 @@ const Command = require("../../Command");
  * @returns {Boolean} True - throws error if fails to validate.
  */
 const validateGuild = (permObj, channelType) => {
-  if (permObj.guildOnly && channelType === "dm") {
-    throw new AppError(
-      "Guild only command",
-      "This command cannot be used in DMs"
-    );
-  }
-  return true;
+	if (permObj.guildOnly && channelType === 'dm') {
+		throw new AppError(
+			'Guild only command',
+			'This command cannot be used in DMs',
+		);
+	}
+	return true;
 };
 
 module.exports = validateGuild;

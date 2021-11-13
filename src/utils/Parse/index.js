@@ -1,184 +1,223 @@
-const Argument = require("../Argument");
-const { parseChannel } = require("./parseChannel");
-const parseEnum = require("./parseEnum");
-
-const parseMember = require("./parseMember");
-const parseUser = require("./parseUser");
-const parseMessage = require("./parseMessage");
-const parseTime = require("./parseTime");
+const parseChannel = require('./parseChannel');
+const parseEnum = require('./parseEnum');
+const parseMember = require('./parseMember');
+const parseUser = require('./parseUser');
+const parseMessage = require('./parseMessage');
+const parseTime = require('./parseTime');
+const parseString = require('./parseString');
+const parseRole = require('./parseRole');
+const parseNumber = require('./parseNumber');
 
 class Parse {
-  #outArgs = [];
-  #inArgs;
-  #message;
-  #channel;
-  #guild;
-  #prefix;
-  #command;
+	#outArgs = [];
+	#inArgs;
+	#message;
+	#channel;
+	#guild;
+	#prefix;
+	#command;
 
-  #inputBuffer;
-  /**
-   *
-   * @param {Argument} args
-   */
-  constructor(args) {
-    this.#message = args.message;
-    this.#channel = args.channel;
-    this.#guild = args.guild;
-    this.#prefix = args.prefix;
-    this.#command = args.command;
-    this.#inArgs = [...args.args];
-  }
+	#inputBuffer;
+	/**
+	 *
+	 * @param {Argument} args
+	 */
+	constructor(args) {
+		this.#message = args.message;
+		this.#channel = args.channel;
+		this.#guild = args.guild;
+		this.#prefix = args.prefix;
+		this.#command = args.command;
+		this.#inArgs = [...args.args];
+	}
 
-  get #input() {
-    this.#inputBuffer = this.#inArgs.shift();
-    return this.#inputBuffer;
-  }
+	get #input() {
+		this.#inputBuffer = this.#inArgs.shift();
+		return this.#inputBuffer;
+	}
 
-  get #restInput() {
-    this.#inputBuffer = this.#inArgs.splice(0, this.#inArgs.length);
-    return this.#inputBuffer;
-  }
-  /**
-   * @param {Function} func
-   */
-  set #output(func) {
-    this.#outArgs.push(func);
-  }
+	get #restInput() {
+		this.#inputBuffer = this.#inArgs.splice(0, this.#inArgs.length);
+		return this.#inputBuffer;
+	}
+	/**
+	 * @param {Function} func
+	 */
+	set #output(func) {
+		this.#outArgs.push(func);
+	}
 
-  #param(name, func, args, options) {
-    this.#output = {
-      func,
-      args,
-      name,
-      input: this.#inputBuffer,
-      ...this.#applyOptions(options),
-    };
+	#param(name, func, args, options) {
+		this.#output = {
+			func,
+			args,
+			name,
+			input: this.#inputBuffer,
+			...this.#applyOptions(options),
+		};
 
-    return this;
-  }
+		return this;
+	}
 
-  #applyOptions(options = {}) {
-    if (!this.#isObject(options)) return { default: options, required: true };
+	#applyOptions(options = {}) {
+		if (!this.#isObject(options)) return { default: options, required: true };
 
-    const obj = {};
-    obj.required = options.required ?? true;
-    obj.default = options.default ?? null;
+		return Object.assign(
+			{ required: true, default: undefined, useOverflow: false },
+			options,
+		);
+	}
 
-    return obj;
-  }
+	member(options) {
+		return this.#param(
+			'Member',
+			parseMember,
+			[this.#input, this.#guild],
+			options,
+		);
+	}
 
-  member(options) {
-    return this.#param(
-      "Member",
-      parseMember,
-      [this.#input, this.#guild],
-      options
-    );
-  }
+	enum(enums, options) {
+		return this.#param(`[${enums}]`, parseEnum, [enums, this.#input], options);
+	}
 
-  enum(enums, options) {
-    return this.#param("Enum", parseEnum, [enums, this.#input], options);
-  }
+	/**
+	 * @param {Object} numberOptions
+	 * @param {Boolean} numberOptions.isInt
+	 * @param {Number} numberOptions.min
+	 * @param {Number} numberOptions.max
+	 */
+	number(numberOptions, options) {
+		return this.#param(
+			'Number',
+			parseNumber,
+			[this.#input, numberOptions],
+			options,
+		);
+	}
 
-  channel(options) {
-    return this.#param(
-      "Channel",
-      parseChannel,
-      [this.#input, this.#guild],
-      options
-    );
-  }
+	channel(options) {
+		return this.#param(
+			'Channel',
+			parseChannel,
+			[this.#input, this.#guild],
+			options,
+		);
+	}
 
-  message(options = {}) {
-    return this.#param("Message", parseMessage, [this.#restInput], options);
-  }
+	message(options) {
+		const name = options?.name ?? 'string';
+		return this.#param(name, parseMessage, [this.#restInput], options);
+	}
 
-  user(options) {
-    return this.#param("User", parseUser, [this.#input], options);
-  }
+	string(options) {
+		const name = options?.name ?? 'string';
+		return this.#param(name, parseString, [this.#input], options);
+	}
 
-  time(options) {
-    return this.#param("Time", parseTime, [this.#input], options);
-  }
+	role(options) {
+		return this.#param('Role', parseRole, [this.#input, this.#guild], options);
+	}
 
-  #generateErrorUsageString(i) {
-    const name = `${this.#prefix}${this.#command.name}`;
+	user(options) {
+		return this.#param('User', parseUser, [this.#input], options);
+	}
 
-    const params = this.#outArgs.reduce((output, value) => {
-      return `${output} ${value.required ? "<" : "["}${value.name}${
-        value.required ? ">" : "]"
-      }`;
-    }, "");
+	time(options) {
+		return this.#param('Time', parseTime, [this.#input], options);
+	}
 
-    const usage = `${name}${params}`;
+	#generateErrorUsageString(i) {
+		const name = `${this.#prefix}${this.#command.name}`;
 
-    const errorName = `${this.#outArgs[i].required ? "<" : "["}${
-      this.#outArgs[i].name
-    }${this.#outArgs[i].required ? ">" : "]"}`;
-    const errorIndex = params.indexOf(errorName);
+		const params = this.#outArgs.reduce((output, value) => {
+			return `${output} ${value.required ? '<' : '['}${value.name}${
+				value.required ? '>' : ']'
+			}`;
+		}, '');
 
-    const leftSideSpace = errorIndex;
-    const arrowAmount = errorName.length;
-    const rightSideSpace = params.length - leftSideSpace - arrowAmount;
+		const usage = `${name}${params}`;
 
-    const arrowString =
-      " ".repeat(name.length) +
-      " ".repeat(leftSideSpace) +
-      "^".repeat(arrowAmount) +
-      " ".repeat(rightSideSpace);
+		const errorName = `${this.#outArgs[i].required ? '<' : '['}${
+			this.#outArgs[i].name
+		}${this.#outArgs[i].required ? '>' : ']'}`;
+		const errorIndex = params.indexOf(errorName);
 
-    return `\`${usage}\`\n\`${arrowString}\`\n\n`;
-  }
+		const leftSideSpace = errorIndex;
+		const arrowAmount = errorName.length;
+		const rightSideSpace = params.length - leftSideSpace - arrowAmount;
 
-  #isObject(value) {
-    return (
-      typeof value === "object" &&
-      Object.getPrototypeOf(value)?.constructor?.name === "Object"
-    );
-  }
-  #isEmpty(value) {
-    if (value instanceof Array) return value.length === 0;
-    return !Boolean(value);
-  }
+		const arrowString =
+			' '.repeat(name.length) +
+			' '.repeat(leftSideSpace) +
+			'^'.repeat(arrowAmount) +
+			' '.repeat(rightSideSpace);
 
-  /**
-   *
-   * @param {Object} options
-   * @param {Boolean} [options.ignoreErrors=false]
-   * @param {Boolean} [options.abortOnError=false]
-   * @returns {Promise<Array>}
-   */
-  async execute(options = {}) {
-    const ignoreErrors = options.ignoreErrors ?? false;
-    const abortOnError = options.abortOnError ?? false;
+		return `\`${usage}\`\n\`${arrowString}\`\n\n`;
+	}
 
-    const output = [];
+	#isObject(value) {
+		return (
+			value !== null &&
+			value !== undefined &&
+			typeof value === 'object' &&
+			Object.getPrototypeOf(value)?.constructor?.name === 'Object'
+		);
+	}
+	#isEmpty(value) {
+		if (value instanceof Array) return value.length === 0;
+		return !value;
+	}
 
-    for (const [i, value] of Object.entries(this.#outArgs)) {
-      try {
-        if (value.default !== null && this.#isEmpty(value.input)) {
-          output.push(value.default);
-          continue;
-        }
-        output.push(await value.func(...value.args));
-      } catch (error) {
-        if (abortOnError) return false;
+	/**
+	 *
+	 * @param {Object} options
+	 * @param {Boolean} [options.ignoreErrors=false]
+	 * @param {Boolean} [options.abortOnError=false]
+	 * @returns {Promise<Array>}
+	 */
+	async execute(options = {}) {
+		const ignoreErrors = options.ignoreErrors ?? false;
+		const abortOnError = options.abortOnError ?? false;
 
-        if (ignoreErrors || !value.required) {
-          output.push(null);
-          continue;
-        }
+		const output = [];
+		let overflow = [];
 
-        if (error.isOperational) 
-          error.message = `${this.#generateErrorUsageString(i)}${error.message}`; // prettier-ignore
+		for (const [i, value] of Object.entries(this.#outArgs)) {
+			try {
+				if (value.default !== undefined && this.#isEmpty(value.input)) {
+					output.push(value.default);
+					overflow = [];
+					continue;
+				}
 
-        throw error;
-      }
-    }
+				if (!this.#isEmpty(overflow)) value.args[0].unshift(overflow);
+				output.push(await value.func(...value.args));
+				overflow = [];
+			} catch (error) {
+				if (abortOnError) return false;
 
-    return output;
-  }
+				overflow = [];
+				if (value.useOverflow) {
+					overflow = value.input;
+					output.push(value.default ?? null);
+					continue;
+				}
+
+				if (ignoreErrors || !value.required) {
+					output.push(this.default ?? null);
+					continue;
+				}
+
+				if (error.isOperational)
+					error.message = `${this.#generateErrorUsageString(i)}${error.message}`;
+
+				throw error;
+			}
+		}
+
+		return output;
+	}
 }
 
-module.exports = (args) => new Parse(args);
+module.exports = args => new Parse(args);

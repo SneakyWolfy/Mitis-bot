@@ -1,7 +1,9 @@
-const { GuildMember } = require("discord.js");
-const AppError = require("../../AppError");
+const AppError = require('../../AppError');
 
-const Command = require("../../Command");
+// eslint-disable-next-line no-unused-vars
+const Command = require('../../Command');
+// eslint-disable-next-line no-unused-vars
+const { GuildMember } = require('discord.js');
 /**
  *
  * @param {Command} permObj
@@ -9,22 +11,22 @@ const Command = require("../../Command");
  * @returns {Boolean} True - throws error if fails to validate.
  */
 const validateNativePermissions = (permObj, member) => {
-  const isPermitted = member.hasPermission(permObj.reqPermissions, {
-    checkAdmin: permObj.adminOverride,
-    checkOwner: permObj.ownerOverride,
-  });
+	const isPermitted = member.permissions.has(permObj.reqPermissions, {
+		checkAdmin: permObj.adminOverride,
+		checkOwner: permObj.ownerOverride,
+	});
 
-  if (!isPermitted) {
-    const missingPerms = permObj.reqPermissions
-      .filter((perm) => !member.permissions.toArray().includes(perm))
-      .join(", ");
+	if (!isPermitted) {
+		const missingPerms = permObj.reqPermissions
+			.filter(perm => !member.permissions.toArray().includes(perm))
+			.join(', ');
 
-    throw new AppError(
-      "Unauthorized",
-      `You don't have the required permission to use this command: \`${missingPerms}\`!`
-    );
-  }
-  return true;
+		throw new AppError(
+			'Unauthorized',
+			`You don't have the required permission to use this command: \`${missingPerms}\`!`,
+		);
+	}
+	return true;
 };
 
 module.exports = validateNativePermissions;
